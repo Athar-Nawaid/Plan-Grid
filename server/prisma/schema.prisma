@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum IssueType {
+  BUG
+  FEATURE
+  TASK
+  STORY
+}
+
+enum IssueStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String
+  avatar       String?
+  passwordHash String      @map("password_hash")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  projects     ProjectMember[]
+  ownedProjects Project[]        @relation("ProjectOwner")
+  createdIssues  Issue[]    @relation("Reporter")
+  assignedIssues Issue[]    @relation("Assignee")
+  comments     Comment[]
+
+  @@map("users")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  key         String   @unique
+  description String?
+  ownerId     String   @map("owner_id")
+  owner       User     @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members  ProjectMember[]
+  issues   Issue[]
+  sprints  Sprint[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String @map("project_id")
+  userId    String @map("user_id")
+  role      Role   @default(MEMBER)
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_members")
+}
+
+model Issue {
+  id          String      @id @default(cuid())
+  projectId   String      @map("project_id")
+  title       String
+  description String?
+  type        IssueType   @default(TASK)
+  status      IssueStatus @default(TODO)
+  priority    Priority    @default(MEDIUM)
+  assigneeId  String?     @map("assignee_id")
+  reporterId  String?     @map("reporter_id")
+  sprintId    String?     @map("sprint_id")
+  storyPoints Int?        @map("story_points")
+  dueDate     DateTime?   @map("due_date")
+  position    Int         @default(0)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation("Assignee", fields: [assigneeId], references: [id])
+  reporter User?   @relation("Reporter", fields: [reporterId], references: [id])
+  sprint   Sprint? @relation(fields: [sprintId], references: [id])
+  comments Comment[]
+
+  @@index([projectId, status])
+  @@map("issues")
+}
+
+model Sprint {
+  id        String        @id @default(cuid())
+  projectId String        @map("project_id")
+  name      String
+  goal      String?
+  startDate DateTime?     @map("start_date")
+  endDate   DateTime?     @map("end_date")
+  status    SprintStatus  @default(PLANNED)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
+
+  @@map("sprints")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  issueId   String   @map("issue_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
